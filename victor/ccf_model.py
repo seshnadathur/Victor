@@ -632,8 +632,8 @@ class CCFModel:
             dvr_interp = _spline(np.append([0.01], reference_r), dvr, ext=3)
         else:
             # rescale as normal
-            vr_interp = _spline(np.append([0.01*rescaling_factor], rescaled_r), vr, ext=3)
-            dvr_interp = _spline(np.append([0.01*rescaling_factor], rescaled_r), dvr/rescaling_factor, ext=3)
+            vr_interp = _spline(np.append([0.01*rescaling_factor], rescaled_r), vr*rescaling_factor, ext=3)
+            dvr_interp = _spline(np.append([0.01*rescaling_factor], rescaled_r), dvr, ext=3)
         if model['rsd_model'] in ['streaming', 'dispersion']:
            sigma_v = params.get('sigma_v', 380)
 
@@ -662,6 +662,14 @@ class CCFModel:
                     r = np.sqrt(s_perp**2 + r_par**2)
                     r_par =  (s_par - v_par * iaH_true) / (1 + iaH_true * vr_interp(r) / r)
                 r = np.sqrt(s_perp**2 + r_par**2)
+                #=============================================================================
+                # fixing underflow for specific combinations of parameters
+                # replace all values less than the tolerance value with next largest
+                tolerance = 1e-7
+                underflows = np.where(r<tolerance)[0]
+                for underflow in underflows:
+                    r[underflow]=np.partition(np.ravel(r), len(underflows))[len(underflows)]
+                #=============================================================================
                 mu_r = r_par / r
                 # now scale the dispersion function for AP dilation and then evaluate
                 sv_spl = si.RectBivariateSpline(self.r_for_sv * rescaling_factor, self.mu_for_sv, self.sv_rmu.T)

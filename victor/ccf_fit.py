@@ -153,10 +153,18 @@ class CCFFit(CCFModel):
         # sense check the data
         if self.fixed_covmat:
             if not (covmat.shape == ((len(self.s) * len(self.poles_s), len(self.s) * len(self.poles_s)))):
-                raise InputError('Unexpected shape of (fixed) covariance matrix')
+                try:
+                    covmat = covmat[:len(self.s) * len(self.poles_s), :len(self.s) * len(self.poles_s)]
+                    print('Warning, (fixed) covariance matrix was cut down to match the number of selected multipoles')
+                except:
+                    raise InputError('Unexpected shape of (fixed) covariance matrix')
         else:
             if not (covmat.shape == ((len(self.beta_covmat), len(self.s) * len(self.poles_s), len(self.s) * len(self.poles_s)))):
-                raise InputError('Unexpected shape of (beta-varying) covariance matrix')
+                try:
+                    covmat = covmat[:, :len(self.s) * len(self.poles_s), :len(self.s) * len(self.poles_s)]
+                    print('Warning, (beta-varying) covariance matrix was cut down to match the number of selected multipoles')
+                except:
+                    raise InputError('Unexpected shape of (beta-varying) covariance matrix')
 
         self.covmat = covmat
         self.icov = np.linalg.inv(self.covmat)
@@ -346,10 +354,32 @@ class CCFFit(CCFModel):
             The 2D covariance matrix used for this evaluation
         """
 
+        # override defaults with settings provided
+        fit_options = copy.deepcopy(self.fit_options)
+        for key in kwargs:
+            fit_options[key] = kwargs[key]
+        
         theory_vector = self.theory_multipole_vector(self.s, params, self.poles_s, **kwargs)
         data_vector = self.multipole_datavector(params.get('beta', None))
         cov = self.get_interpolated_covariance(params.get('beta', None))
         icov = self.get_interpolated_precision(params.get('beta', None))
+
+        # compute the chi-squared value according to Percival et al (2021) Eq. 56
+        if 'chisq' in fit_options['likelihood']:
+            if fit_options['likelihood']['chisq'].lower() == 'percival':
+                # ensure likelihood is assumed Gaussian
+                try:
+                    assert(fit_options['likelihood']['form'].lower() == 'gaussian')
+                except AssertionError:
+                    raise InputError('When using the Percival prescription for chi-square calculation, likelihood form must be Gaussian.')
+                # calculate the re-scaling factor for the covariance matrix
+                nmocks  = fit_options['likelihood'].get('nmocks', 1)
+                nparams = fit_options['likelihood']['nparams'] # we want it to fail if this is not provided
+                ndata = len(self.s) * len(self.poles_s)
+                B = (nmocks - ndata - 2) / ((nmocks - ndata - 1) * (nmocks - ndata - 4))
+                prefactor = (nmocks-1)*(1+B*(ndata-nparams)) / (nmocks-ndata+nparams-1)
+
+                icov /= prefactor
 
         return np.dot(np.dot(theory_vector - data_vector, icov), theory_vector - data_vector), cov
 
