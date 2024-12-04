@@ -87,7 +87,7 @@ class ExcursionSetProfile:
             #This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency
             pars.set_cosmology(H0=100*h, ombh2=ombh2, omch2=omch2, mnu=mnu, omk=0)
             # primordial amplitude As value not important as will be normalised later
-            pars.Initpower.set_params(As=2e-9, ns=ns, r=0)
+            pars.InitPower.set_params(As=2e-9, ns=ns, r=0)
             if z > 0:
                 pars.set_matter_power(redshifts=[z, 0.], kmax=2.0)
             else:
